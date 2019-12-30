@@ -145,7 +145,7 @@ class EfficientNet(nn.Module):
                 output_filters=round_filters(block_args.output_filters, self._global_params),
                 num_repeat=round_repeats(block_args.num_repeat, self._global_params)
             )
-            if block_args.in_channels >= 112:
+            if block_args.input_filters >= 112:
                 # for parallel block 1
                 self._blocks_p1.append(MBConvBlock(block_args, self._global_params))
                 if block_args.num_repeat > 1:
