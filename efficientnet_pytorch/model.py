@@ -133,6 +133,10 @@ class EfficientNet(nn.Module):
 
         # Build blocks
         self._blocks = nn.ModuleList([])
+        self._blocks_p1 = nn.ModuleList([]) # Parallel block 1
+        self._blocks_p2 = nn.ModuleList([]) # Parallel block 2
+        self._blocks_p3 = nn.ModuleList([]) # Parallel block 3
+
         for block_args in self._blocks_args:
 
             # Update block input and output filters based on depth multiplier.
@@ -141,13 +145,33 @@ class EfficientNet(nn.Module):
                 output_filters=round_filters(block_args.output_filters, self._global_params),
                 num_repeat=round_repeats(block_args.num_repeat, self._global_params)
             )
-
+            if block_args.in_channels >= 112:
+                # for parallel block 1
+                self._blocks_p1.append(MBConvBlock(block_args, self._global_params))
+                if block_args.num_repeat > 1:
+                    block_args = block_args._replace(input_filters=block_args.output_filters, stride=1)
+                for _ in range(block_args.num_repeat - 1):
+                    self._blocks_p1.append(MBConvBlock(block_args, self._global_params))
+                # for parallel block 2    
+                self._blocks_p2.append(MBConvBlock(block_args, self._global_params))
+                if block_args.num_repeat > 1:
+                    block_args = block_args._replace(input_filters=block_args.output_filters, stride=1)
+                for _ in range(block_args.num_repeat - 1):
+                    self._blocks_p2.append(MBConvBlock(block_args, self._global_params))
+                # for parallel block 3    
+                self._blocks_p3.append(MBConvBlock(block_args, self._global_params))
+                if block_args.num_repeat > 1:
+                    block_args = block_args._replace(input_filters=block_args.output_filters, stride=1)
+                for _ in range(block_args.num_repeat - 1):
+                    self._blocks_p3.append(MBConvBlock(block_args, self._global_params))        
             # The first block needs to take care of stride and filter size increase.
-            self._blocks.append(MBConvBlock(block_args, self._global_params))
-            if block_args.num_repeat > 1:
-                block_args = block_args._replace(input_filters=block_args.output_filters, stride=1)
-            for _ in range(block_args.num_repeat - 1):
+            else:
+                # same layers for each i.e blocks is same for all.
                 self._blocks.append(MBConvBlock(block_args, self._global_params))
+                if block_args.num_repeat > 1:
+                    block_args = block_args._replace(input_filters=block_args.output_filters, stride=1)
+                for _ in range(block_args.num_repeat - 1):
+                    self._blocks.append(MBConvBlock(block_args, self._global_params))
 
         # Head
         in_channels = block_args.output_filters  # output of final block
@@ -166,8 +190,19 @@ class EfficientNet(nn.Module):
         self._swish = MemoryEfficientSwish() if memory_efficient else Swish()
         for block in self._blocks:
             block.set_swish(memory_efficient)
+        for block in self._blocks_p1:
+            block.set_swish(memory_efficient)
+        for block in self._blocks_p2:
+            block.set_swish(memory_efficient)
+        for block in self._blocks_p3:
+            block.set_swish(memory_efficient)            
 
-
+    def _feature_fc(self, x, bs):
+        x = self._avg_pooling(x)
+        x = x.view(bs, -1)
+        x = self._dropout(x)
+        x = self._fc(x)
+        return x
     def extract_features(self, inputs):
         """ Returns output of the final convolution layer """
 
@@ -180,24 +215,44 @@ class EfficientNet(nn.Module):
             if drop_connect_rate:
                 drop_connect_rate *= float(idx) / len(self._blocks)
             x = block(x, drop_connect_rate=drop_connect_rate)
-
-        # Head
-        x = self._swish(self._bn1(self._conv_head(x)))
-
-        return x
+        # Parallel block 1
+        for idx, block in enumerate(self._blocks_p1):
+            x1 = x
+            drop_connect_rate = self._global_params.drop_connect_rate
+            if drop_connect_rate:
+                drop_connect_rate *= float(idx) / len(self._blocks)
+            x1 = block(x1, drop_connect_rate=drop_connect_rate)
+        x1 = self._swish(self._bn1(self._conv_head(x1)))
+        # Parallel block 2
+        for idx, block in enumerate(self._blocks_p2):
+            x2 = x
+            drop_connect_rate = self._global_params.drop_connect_rate
+            if drop_connect_rate:
+                drop_connect_rate *= float(idx) / len(self._blocks)
+            x2 = block(x2, drop_connect_rate=drop_connect_rate)
+        x2 = self._swish(self._bn1(self._conv_head(x2)))
+        # Parallel block 3
+        for idx, block in enumerate(self._blocks_p3):
+            x3 = x
+            drop_connect_rate = self._global_params.drop_connect_rate
+            if drop_connect_rate:
+                drop_connect_rate *= float(idx) / len(self._blocks)
+            x3 = block(x3, drop_connect_rate=drop_connect_rate)     
+        x3 = self._swish(self._bn1(self._conv_head(x3)))
+        
+        return x1, x2, x3
 
     def forward(self, inputs):
         """ Calls extract_features to extract features, applies final linear layer, and returns logits. """
         bs = inputs.size(0)
         # Convolution layers
-        x = self.extract_features(inputs)
+        x1, x2, x3 = self.extract_features(inputs)
 
         # Pooling and final linear layer
-        x = self._avg_pooling(x)
-        x = x.view(bs, -1)
-        x = self._dropout(x)
-        x = self._fc(x)
-        return x
+        x1 = self._feature_fc(x1, bs)
+        x2 = self._feature_fc(x2, bs)
+        x3 = self._feature_fc(x3, bs)
+        return x1, x2, x3
 
     @classmethod
     def from_name(cls, model_name, override_params=None):
