@@ -157,18 +157,7 @@ class EfficientNet(nn.Module):
                     self._blocks_p1.append(MBConvBlock(block_args, self._global_params))
                     self._blocks_p2.append(MBConvBlock(block_args, self._global_params))
                     self._blocks_p3.append(MBConvBlock(block_args, self._global_params))
-                # # for parallel block 2    
-                # # self._blocks_p2.append(MBConvBlock(block_args, self._global_params))
-                # if block_args.num_repeat > 1:
-                #     block_args = block_args._replace(input_filters=block_args.output_filters, stride=1)
-                # for _ in range(block_args.num_repeat - 1):
-                #     self._blocks_p2.append(MBConvBlock(block_args, self._global_params))
-                # # for parallel block 3    
-                # if block_args.num_repeat > 1:
-                #     block_args = block_args._replace(input_filters=block_args.output_filters, stride=1)
-                # for _ in range(block_args.num_repeat - 1):
-                #     self._blocks_p3.append(MBConvBlock(block_args, self._global_params))        
-            # The first block needs to take care of stride and filter size increase.
+
             else:
                 # same layers for each i.e blocks is same for all.
                 self._blocks.append(MBConvBlock(block_args, self._global_params))
@@ -204,6 +193,7 @@ class EfficientNet(nn.Module):
     def _feature_fc(self, x, bs):
         x = self._avg_pooling(x)
         x = x.view(bs, -1)
+        print(1)
         x = self._dropout(x)
         x = self._fc(x)
         return x
@@ -236,6 +226,7 @@ class EfficientNet(nn.Module):
                 drop_connect_rate *= float(idx) / len(self._blocks)
             x2 = block(x2, drop_connect_rate=drop_connect_rate)
         x2 = self._swish(self._bn1(self._conv_head(x2)))
+        # print
         # Parallel block 3
         x3 = Variable(x.data.clone(), requires_grad=True)
         for idx, block in enumerate(self._blocks_p3):
@@ -244,7 +235,8 @@ class EfficientNet(nn.Module):
                 drop_connect_rate *= float(idx) / len(self._blocks)
             x3 = block(x3, drop_connect_rate=drop_connect_rate)     
         x3 = self._swish(self._bn1(self._conv_head(x3)))
-        
+
+
         return x1, x2, x3
 
     def forward(self, inputs):
