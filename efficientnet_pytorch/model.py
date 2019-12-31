@@ -253,7 +253,7 @@ class EfficientNet(nn.Module):
         x1 = self._feature_fc(x1, bs)
         x2 = self._feature_fc(x2, bs)
         x3 = self._feature_fc(x3, bs)
-        return x1, x2, x3
+        return torch.cat((x1, x2, x3),0)
 
     @classmethod
     def from_name(cls, model_name, override_params=None):
