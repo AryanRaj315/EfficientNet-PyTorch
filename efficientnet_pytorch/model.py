@@ -148,22 +148,26 @@ class EfficientNet(nn.Module):
             if block_args.input_filters >= 112:
                 # for parallel block 1
                 self._blocks_p1.append(MBConvBlock(block_args, self._global_params))
+                self._blocks_p2.append(MBConvBlock(block_args, self._global_params))
+                self._blocks_p3.append(MBConvBlock(block_args, self._global_params))
+
                 if block_args.num_repeat > 1:
                     block_args = block_args._replace(input_filters=block_args.output_filters, stride=1)
                 for _ in range(block_args.num_repeat - 1):
                     self._blocks_p1.append(MBConvBlock(block_args, self._global_params))
-                # for parallel block 2    
-                self._blocks_p2.append(MBConvBlock(block_args, self._global_params))
-                if block_args.num_repeat > 1:
-                    block_args = block_args._replace(input_filters=block_args.output_filters, stride=1)
-                for _ in range(block_args.num_repeat - 1):
                     self._blocks_p2.append(MBConvBlock(block_args, self._global_params))
-                # for parallel block 3    
-                self._blocks_p3.append(MBConvBlock(block_args, self._global_params))
-                if block_args.num_repeat > 1:
-                    block_args = block_args._replace(input_filters=block_args.output_filters, stride=1)
-                for _ in range(block_args.num_repeat - 1):
-                    self._blocks_p3.append(MBConvBlock(block_args, self._global_params))        
+                    self._blocks_p3.append(MBConvBlock(block_args, self._global_params))
+                # # for parallel block 2    
+                # # self._blocks_p2.append(MBConvBlock(block_args, self._global_params))
+                # if block_args.num_repeat > 1:
+                #     block_args = block_args._replace(input_filters=block_args.output_filters, stride=1)
+                # for _ in range(block_args.num_repeat - 1):
+                #     self._blocks_p2.append(MBConvBlock(block_args, self._global_params))
+                # # for parallel block 3    
+                # if block_args.num_repeat > 1:
+                #     block_args = block_args._replace(input_filters=block_args.output_filters, stride=1)
+                # for _ in range(block_args.num_repeat - 1):
+                #     self._blocks_p3.append(MBConvBlock(block_args, self._global_params))        
             # The first block needs to take care of stride and filter size increase.
             else:
                 # same layers for each i.e blocks is same for all.
