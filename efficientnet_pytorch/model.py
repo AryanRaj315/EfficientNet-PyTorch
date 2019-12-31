@@ -203,6 +203,7 @@ class EfficientNet(nn.Module):
         x = self._dropout(x)
         x = self._fc(x)
         return x
+
     def extract_features(self, inputs):
         """ Returns output of the final convolution layer """
 
@@ -216,24 +217,24 @@ class EfficientNet(nn.Module):
                 drop_connect_rate *= float(idx) / len(self._blocks)
             x = block(x, drop_connect_rate=drop_connect_rate)
         # Parallel block 1
+        x1 = x
         for idx, block in enumerate(self._blocks_p1):
-            x1 = x
             drop_connect_rate = self._global_params.drop_connect_rate
             if drop_connect_rate:
                 drop_connect_rate *= float(idx) / len(self._blocks)
             x1 = block(x1, drop_connect_rate=drop_connect_rate)
         x1 = self._swish(self._bn1(self._conv_head(x1)))
         # Parallel block 2
+        x2 = x
         for idx, block in enumerate(self._blocks_p2):
-            x2 = x
             drop_connect_rate = self._global_params.drop_connect_rate
             if drop_connect_rate:
                 drop_connect_rate *= float(idx) / len(self._blocks)
             x2 = block(x2, drop_connect_rate=drop_connect_rate)
         x2 = self._swish(self._bn1(self._conv_head(x2)))
         # Parallel block 3
+        x3 = x
         for idx, block in enumerate(self._blocks_p3):
-            x3 = x
             drop_connect_rate = self._global_params.drop_connect_rate
             if drop_connect_rate:
                 drop_connect_rate *= float(idx) / len(self._blocks)
