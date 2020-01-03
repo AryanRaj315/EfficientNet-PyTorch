@@ -169,14 +169,31 @@ class EfficientNet(nn.Module):
         # Head
         in_channels = block_args.output_filters  # output of final block
         out_channels = round_filters(1280, self._global_params)
-        self._conv_head = Conv2d(in_channels, out_channels, kernel_size=1, bias=False)
-        self._bn1 = nn.BatchNorm2d(num_features=out_channels, momentum=bn_mom, eps=bn_eps)
+        
+        self._conv_head_p1 = Conv2d(in_channels, out_channels, kernel_size=1, bias=False)
+        self._bn1_p1 = nn.BatchNorm2d(num_features=out_channels, momentum=bn_mom, eps=bn_eps)
+        
+        self._conv_head_p2 = Conv2d(in_channels, out_channels, kernel_size=1, bias=False)
+        self._bn1_p2 = nn.BatchNorm2d(num_features=out_channels, momentum=bn_mom, eps=bn_eps)
+        
+        self._conv_head_p3 = Conv2d(in_channels, out_channels, kernel_size=1, bias=False)
+        self._bn1_p3 = nn.BatchNorm2d(num_features=out_channels, momentum=bn_mom, eps=bn_eps)
 
         # Final linear layer
-        self._avg_pooling = nn.AdaptiveAvgPool2d(1)
-        self._dropout = nn.Dropout(self._global_params.dropout_rate)
-        self._fc = nn.Linear(out_channels, 1)
+        self._avg_pooling_p1 = nn.AdaptiveAvgPool2d(1)
+        self._dropout_p1 = nn.Dropout(self._global_params.dropout_rate)
+        self._fc_p1 = nn.Linear(out_channels, 1)
+        
+        self._avg_pooling_p2 = nn.AdaptiveAvgPool2d(1)
+        self._dropout_p2 = nn.Dropout(self._global_params.dropout_rate)
+        self._fc_p2 = nn.Linear(out_channels, 1)
+        
+        self._avg_pooling_p3 = nn.AdaptiveAvgPool2d(1)
+        self._dropout_p3 = nn.Dropout(self._global_params.dropout_rate)
+        self._fc_p3 = nn.Linear(out_channels, 1)
+        
         self._swish = MemoryEfficientSwish()
+        
 
     def set_swish(self, memory_efficient=True):
         """Sets swish function as memory efficient (for training) or standard (for export)"""
@@ -188,15 +205,7 @@ class EfficientNet(nn.Module):
         for block in self._blocks_p2:
             block.set_swish(memory_efficient)
         for block in self._blocks_p3:
-            block.set_swish(memory_efficient)            
-
-    def _feature_fc(self, x, bs):
-        x = self._avg_pooling(x)
-        x = x.view(bs, -1)
-        print(1)
-        x = self._dropout(x)
-        x = self._fc(x)
-        return x
+            block.set_swish(memory_efficient)
 
     def extract_features(self, inputs):
         """ Returns output of the final convolution layer """
@@ -217,7 +226,7 @@ class EfficientNet(nn.Module):
             if drop_connect_rate:
                 drop_connect_rate *= float(idx) / len(self._blocks)
             x1 = block(x1, drop_connect_rate=drop_connect_rate)
-        x1 = self._swish(self._bn1(self._conv_head(x1)))
+        x1 = self._swish(self._bn1_p1(self._conv_head_p1(x1)))
         # Parallel block 2
         x2 = Variable(x.data.clone(), requires_grad=True)
         for idx, block in enumerate(self._blocks_p2):
@@ -225,7 +234,7 @@ class EfficientNet(nn.Module):
             if drop_connect_rate:
                 drop_connect_rate *= float(idx) / len(self._blocks)
             x2 = block(x2, drop_connect_rate=drop_connect_rate)
-        x2 = self._swish(self._bn1(self._conv_head(x2)))
+        x2 = self._swish(self._bn1_p2(self._conv_head_p2(x2)))
         # print
         # Parallel block 3
         x3 = Variable(x.data.clone(), requires_grad=True)
@@ -234,7 +243,7 @@ class EfficientNet(nn.Module):
             if drop_connect_rate:
                 drop_connect_rate *= float(idx) / len(self._blocks)
             x3 = block(x3, drop_connect_rate=drop_connect_rate)     
-        x3 = self._swish(self._bn1(self._conv_head(x3)))
+        x3 = self._swish(self._bn1_p3(self._conv_head_p3(x3)))
 
 
         return x1, x2, x3
@@ -246,10 +255,22 @@ class EfficientNet(nn.Module):
         x1, x2, x3 = self.extract_features(inputs)
 
         # Pooling and final linear layer
-        x1 = self._feature_fc(x1, bs)
-        x2 = self._feature_fc(x2, bs)
-        x3 = self._feature_fc(x3, bs)
-        return torch.cat((x1, x2, x3),0)
+        x1 = self._avg_pooling_p1(x1)
+        x1 = x1.view(bs, -1)
+        x1 = self._dropout_p1(x1)
+        x1 = self._fc_p1(x1)
+        
+        x2 = self._avg_pooling_p2(x2)
+        x2 = x2.view(bs, -1)
+        x2 = self._dropout_p2(x2)
+        x2 = self._fc_p2(x2)
+        
+        x3 = self._avg_pooling_p3(x3)
+        x3 = x3.view(bs, -1)
+        x3 = self._dropout_p3(x3)
+        x3 = self._fc_p3(x3)
+        
+        return x1, x2, x3
 
     @classmethod
     def from_name(cls, model_name, override_params=None):
