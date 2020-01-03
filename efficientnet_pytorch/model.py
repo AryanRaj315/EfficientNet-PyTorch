@@ -220,7 +220,7 @@ class EfficientNet(nn.Module):
                 drop_connect_rate *= float(idx) / len(self._blocks)
             x = block(x, drop_connect_rate=drop_connect_rate)
         # Parallel block 1
-        x1 = Variable(x.data.clone(), requires_grad=True)
+        x1 = torch.Variable(x.data.clone(), requires_grad=True)
         for idx, block in enumerate(self._blocks_p1):
             drop_connect_rate = self._global_params.drop_connect_rate
             if drop_connect_rate:
@@ -228,7 +228,7 @@ class EfficientNet(nn.Module):
             x1 = block(x1, drop_connect_rate=drop_connect_rate)
         x1 = self._swish(self._bn1_p1(self._conv_head_p1(x1)))
         # Parallel block 2
-        x2 = Variable(x.data.clone(), requires_grad=True)
+        x2 = torch.Variable(x.data.clone(), requires_grad=True)
         for idx, block in enumerate(self._blocks_p2):
             drop_connect_rate = self._global_params.drop_connect_rate
             if drop_connect_rate:
@@ -237,7 +237,7 @@ class EfficientNet(nn.Module):
         x2 = self._swish(self._bn1_p2(self._conv_head_p2(x2)))
         # print
         # Parallel block 3
-        x3 = Variable(x.data.clone(), requires_grad=True)
+        x3 = torch.Variable(x.data.clone(), requires_grad=True)
         for idx, block in enumerate(self._blocks_p3):
             drop_connect_rate = self._global_params.drop_connect_rate
             if drop_connect_rate:
